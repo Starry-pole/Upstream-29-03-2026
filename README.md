@@ -55,15 +55,12 @@ Space Station 14 — это ремейк классической SS13, рабо
 
 Мы рады принять вклад от любого человека! Заходите в наш Discord, если хотите помочь.
 
-У нас есть [список проблем](https://github.com/space-syndicate/space-station-14-content/issues), которые нужно решить. Не бойтесь просить о помощи, но убедитесь, что ваши изменения и PRы соответствуют [руководству по контрибьюту](https://docs.spacestation14.com/en/general-development/codebase-info/pull-request-guidelines.html).
+У нас есть [список проблем](https://github.com/Starry-pole/starry-pole-14/issues), которые нужно решить. Не бойтесь просить о помощи, но убедитесь, что ваши изменения и PRы соответствуют [руководству по контрибьюту](https://docs.spacestation14.com/en/general-development/codebase-info/pull-request-guidelines.html).
 
 ## Участники проекта
 
 Спасибо всем людям, внесшим вклад в развитие Starry Pole и Space Station 14:
 
-<!---
-ЗАМЕНИТЕ Starry-pole/starry-pole-14 НА ВАШЕ ИМЯ ПОЛЬЗОВАТЕЛЯ И НАЗВАНИЕ РЕПОЗИТОРИЯ ЕСЛИ ОНО ОТЛИЧАЕТСЯ
---->
 [![Участники](https://contrib.rocks/image?repo=Starry-pole/starry-pole-14)](https://github.com/Starry-pole/starry-pole-14/graphs/contributors)
 
 ---
@@ -90,13 +87,13 @@ Space Station 14 — это ремейк классической SS13, рабо
 <details>
 <summary><a href=#><img src="https://img.shields.io/badge/Licence-MIT-green?style=for-the-badge" alt="MIT license"></a></summary>
 
-> Весь программный код данного репозитория лицензирован под [MIT License](https://github.com/space-syndicate/space-station-14/blob/master/LICENSE.TXT).
+> Весь программный код данного репозитория лицензирован под [MIT License](https://github.com/Starry-pole/starry-pole-14/blob/master/LICENSE.TXT).
 </details>
 
 <details>
 <summary><a href=#><img src="https://img.shields.io/badge/Licence-CC_BY--SA_3.0-lightblue?style=for-the-badge" alt="Creative Commons 3.0 BY-SA"></a></summary>
 
-> Большинство ассетов (текстуры, звуки) лицензированы под [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), если не указано иное. Информация об авторских правах содержится в файле метаданных (meta.json) ассета. [Пример](https://github.com/space-syndicate/space-station-14/blob/master/Resources/Textures/Objects/Tools/crowbar.rsi/meta.json).
+> Большинство ассетов (текстуры, звуки) лицензированы под [CC-BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), если не указано иное. Информация об авторских правах содержится в файле метаданных (meta.json) ассета. [Пример](https://github.com/Starry-pole/starry-pole-14/blob/master/Resources/Textures/Objects/Tools/crowbar.rsi/meta.json).
 </details>
 
 <details>
