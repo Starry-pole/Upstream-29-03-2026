@@ -49,14 +49,8 @@ Space Station 14 — это ремейк классической SS13, рабо
 
 </div>
 
-<!---
-## Активность проекта
+![Alt](https://repobeats.axiom.co/api/embed/ec6ffd6bd1beb646b96e8160ad387b9e7660afb4.svg "Repobeats analytics image")
 
-
-ЗАМЕНИТЕ ССЫЛКУ НИЖЕ НА ВАШУ, СГЕНЕРИРОВАННУЮ НА САЙТЕ repobeats.axiom.co
-
-![Alt](https://repobeats.axiom.co/api/embed/PLACEHOLDER_HASH.svg "Repobeats analytics image")
--->
 ## Контрибьют
 
 Мы рады принять вклад от любого человека! Заходите в наш Discord, если хотите помочь.
