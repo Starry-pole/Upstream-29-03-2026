@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:000046,50:00FFFF,100:1CB5E0&height=250&section=header&text=Starry%20Pole&fontSize=70&animation=twinkling&fontColor=fff&fontAlignY=40" />
+  <img alt="Starry Pole - анимированный баннер-заголовок" src="https://capsule-render.vercel.app/api?type=waving&color=0:000046,50:00FFFF,100:1CB5E0&height=250&section=header&text=Starry%20Pole&fontSize=70&animation=twinkling&fontColor=fff&fontAlignY=40" />
 </p>
 
 <!---
