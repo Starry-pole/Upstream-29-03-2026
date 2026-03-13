@@ -1,0 +1,20 @@
+- type: entity
+  id: DoneIcons
+  components:
+  - type: Sprite
+    sprite: _StarryPole/developmentplan.rsi
+    state: done
+
+- type: entity
+  id: PannedIcons
+  components:
+  - type: Sprite
+    sprite: _StarryPole/developmentplan.rsivv
+    state: panned
+
+- type: entity
+  id: PendingIcons
+  components:
+  - type: Sprite
+    sprite: _StarryPole/developmentplan.rsi
+    state: pending
