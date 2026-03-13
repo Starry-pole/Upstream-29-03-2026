@@ -1,0 +1,40 @@
+<Document>
+  # План по разработке Starry Pole
+
+  <Table Columns="2">
+    <ColorBox Color="#3A3A3A" ColumnSpan="2">
+      <Box HorizontalAlignment="Center" VerticalAlignment="Center">
+        [bold]Готовоность[/bold]
+      </Box>
+    </ColorBox>
+    <ColorBox Color="#3A3A3A" ColumnSpan="2">
+      <Box HorizontalAlignment="Center" VerticalAlignment="Center">
+        [bold]ЗАДАЧА[/bold]
+      </Box>
+    </ColorBox>
+
+    <ColorBox ColumnSpan="2">
+      <Box HorizontalAlignment="Center" VerticalAlignment="Center">
+        <GuideEntityEmbed Entity="DoneIcons" Caption=""/>
+      </Box>
+    </ColorBox>
+    <ColorBox ColumnSpan="2">
+      <Box HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10">
+        Изменения и добавления лицензии и логотипы Starry Pole
+      </Box>
+    </ColorBox>
+
+    <ColorBox ColumnSpan="2">
+      <Box HorizontalAlignment="Center" VerticalAlignment="Center">
+        <GuideEntityEmbed Entity="PendingIcons" Caption=""/>
+      </Box>
+    </ColorBox>
+    <ColorBox ColumnSpan="2">
+      <Box HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10">
+        Новый антагонист «Эхо»
+      </Box>
+    </ColorBox>
+  </Table>
+
+
+</Document>
