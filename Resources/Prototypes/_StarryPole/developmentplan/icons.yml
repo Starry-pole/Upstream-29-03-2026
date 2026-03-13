@@ -1,5 +1,7 @@
 - type: entity
   id: DoneIcons
+  abstract: true
+  suffix: "development plan"
   components:
   - type: Sprite
     sprite: _StarryPole/developmentplan.rsi
@@ -7,13 +9,15 @@
 
 - type: entity
   id: PannedIcons
+  abstract: true
   components:
   - type: Sprite
-    sprite: _StarryPole/developmentplan.rsivv
+    sprite: _StarryPole/developmentplan.rsi
     state: panned
 
 - type: entity
   id: PendingIcons
+  abstract: true
   components:
   - type: Sprite
     sprite: _StarryPole/developmentplan.rsi
