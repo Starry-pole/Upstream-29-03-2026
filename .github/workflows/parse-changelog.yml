@@ -1,0 +1,245 @@
+name: Parse Changelog from PR
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [master, main]
+
+jobs:
+  parse-changelog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR details
+        id: pr-details
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+          echo "PR_URL=${PR_URL}" >> $GITHUB_ENV
+
+          # Сохраняем тело PR во временный файл для дальнейшей обработки
+          echo "${PR_BODY}" > pr_body.txt
+
+      - name: Extract changelog from PR
+        id: extract-changelog
+        run: |
+          # Ищем начало changelog с :cl: и конец перед авто-комментарием
+          CHANGELOG=$(cat pr_body.txt | awk '/:cl:/{flag=1; next} /<!-- This is an auto-generated comment/{flag=0} flag')
+
+          if [ -z "$CHANGELOG" ]; then
+            echo "No changelog found in PR"
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Очищаем от лишних пробелов и пустых строк
+          CHANGELOG=$(echo "$CHANGELOG" | sed '/^[[:space:]]*$/d')
+
+          echo "found=true" >> $GITHUB_OUTPUT
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          echo "$CHANGELOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "Extracted changelog:"
+          echo "$CHANGELOG"
+
+      - name: Parse changelog entries
+        if: steps.extract-changelog.outputs.found == 'true'
+        id: parse-entries
+        run: |
+          # Получаем автора из первой строки changelog после :cl:
+          AUTHOR=$(echo "$CHANGELOG" | head -n1 | sed 's/^:cl:[[:space:]]*//g' | xargs)
+
+          # Парсим остальные строки
+          ENTRIES=""
+          while IFS= read -r line; do
+            # Пропускаем первую строку (автор)
+            if [ -z "$ENTRIES" ] && [ -z "$AUTHOR_SET" ]; then
+              AUTHOR_SET="true"
+              continue
+            fi
+
+            # Определяем тип изменения
+            if [[ "$line" =~ ^-[[:space:]]*add:[[:space:]]*(.*)$ ]]; then
+              MESSAGE="${BASH_REMATCH[1]}"
+              TYPE="Add"
+            elif [[ "$line" =~ ^-[[:space:]]*remove:[[:space:]]*(.*)$ ]]; then
+              MESSAGE="${BASH_REMATCH[1]}"
+              TYPE="Remove"
+            elif [[ "$line" =~ ^-[[:space:]]*tweak:[[:space:]]*(.*)$ ]]; then
+              MESSAGE="${BASH_REMATCH[1]}"
+              TYPE="Tweak"
+            elif [[ "$line" =~ ^-[[:space:]]*fix:[[:space:]]*(.*)$ ]]; then
+              MESSAGE="${BASH_REMATCH[1]}"
+              TYPE="Fix"
+            else
+              continue
+            fi
+
+            if [ -n "$MESSAGE" ]; then
+              # Экранируем кавычки в сообщении
+              MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+              ENTRIES="${ENTRIES}${MESSAGE}|${TYPE}\n"
+            fi
+          done <<< "$CHANGELOG"
+
+          echo "AUTHOR=${AUTHOR}" >> $GITHUB_OUTPUT
+          echo "ENTRIES<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$ENTRIES" | sed '/^[[:space:]]*$/d' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create directory if not exists
+        if: steps.extract-changelog.outputs.found == 'true'
+        run: |
+          mkdir -p Resources/Changelog
+
+      - name: Update changelog file
+        if: steps.extract-changelog.outputs.found == 'true'
+        run: |
+          CHANGELOG_FILE="Resources/Changelog/ChangelogStarryPole.yml"
+
+          # Создаем файл если не существует
+          if [ ! -f "$CHANGELOG_FILE" ]; then
+            echo "# Changelog StarryPole" > $CHANGELOG_FILE
+            echo "# Этот файл автоматически обновляется при добавлении changelog в PR" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+          fi
+
+          # Определяем следующий ID
+          if [ -f "$CHANGELOG_FILE" ]; then
+            # Ищем максимальный ID
+            MAX_ID=$(grep -E "^id:" "$CHANGELOG_FILE" | sed 's/id: //g' | sort -n | tail -1 || echo 0)
+            NEW_ID=$((MAX_ID + 1))
+          else
+            NEW_ID=1
+          fi
+
+          # Текущее время в нужном формате
+          CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S.0000000+00:00")
+
+          # Создаем временный файл с новыми записями
+          TEMP_FILE=$(mktemp)
+
+          # Добавляем новую запись
+          echo "id: ${NEW_ID}" >> $TEMP_FILE
+          echo "  time: '${CURRENT_TIME}'" >> $TEMP_FILE
+          echo "  url: ${{ env.PR_URL }}" >> $TEMP_FILE
+          echo "- author: ${{ steps.parse-entries.outputs.AUTHOR }}" >> $TEMP_FILE
+          echo "  changes:" >> $TEMP_FILE
+
+          # Добавляем все изменения
+          if [ -n "${{ steps.parse-entries.outputs.ENTRIES }}" ]; then
+            while IFS= read -r entry; do
+              if [ -n "$entry" ]; then
+                IFS='|' read -r message type <<< "$entry"
+                echo "  - message: \"${message}\"" >> $TEMP_FILE
+                echo "    type: ${type}" >> $TEMP_FILE
+              fi
+            done <<< "$(echo -e "${{ steps.parse-entries.outputs.ENTRIES }}")"
+          fi
+
+          # Добавляем пустую строку для разделения
+          echo "" >> $TEMP_FILE
+
+          # Проверяем, что файл содержит корректные данные
+          if [ -s "$TEMP_FILE" ]; then
+            # Вставляем новые записи в начало файла (после заголовков)
+            if [ -f "$CHANGELOG_FILE" ]; then
+              # Копируем существующий файл
+              cp "$CHANGELOG_FILE" "${CHANGELOG_FILE}.old"
+
+              # Сохраняем заголовки если есть
+              HEADER_LINES=$(grep -n "^id:" "$CHANGELOG_FILE" | head -1 | cut -d: -f1)
+              if [ -n "$HEADER_LINES" ] && [ "$HEADER_LINES" -gt 1 ]; then
+                HEADER_LINES=$((HEADER_LINES - 1))
+                head -n $HEADER_LINES "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.new"
+              else
+                # Если нет заголовков, просто создаем пустой файл
+                > "${CHANGELOG_FILE}.new"
+              fi
+
+              # Добавляем новые записи
+              cat "$TEMP_FILE" >> "${CHANGELOG_FILE}.new"
+
+              # Добавляем старые записи (без заголовков)
+              if [ -n "$HEADER_LINES" ] && [ "$HEADER_LINES" -gt 1 ]; then
+                tail -n +$((HEADER_LINES + 1)) "$CHANGELOG_FILE" >> "${CHANGELOG_FILE}.new"
+              else
+                cat "$CHANGELOG_FILE" >> "${CHANGELOG_FILE}.new"
+              fi
+
+              # Заменяем оригинальный файл
+              mv "${CHANGELOG_FILE}.new" "$CHANGELOG_FILE"
+              rm -f "${CHANGELOG_FILE}.old"
+            else
+              # Если файла нет, просто копируем временный
+              cp "$TEMP_FILE" "$CHANGELOG_FILE"
+            fi
+
+            echo "Changelog updated successfully in $CHANGELOG_FILE"
+            echo "Added entry with ID: ${NEW_ID}"
+          else
+            echo "No valid changelog entries to add"
+            exit 1
+          fi
+
+      - name: Commit and push changes
+        if: steps.extract-changelog.outputs.found == 'true'
+        run: |
+          CHANGELOG_FILE="Resources/Changelog/ChangelogStarryPole.yml"
+
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "$CHANGELOG_FILE"
+          git commit -m "Add changelog for PR #${{ env.PR_NUMBER }} [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Add comment to PR
+        if: steps.extract-changelog.outputs.found == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author = '${{ steps.parse-entries.outputs.AUTHOR }}';
+            const prNumber = '${{ env.PR_NUMBER }}';
+
+            // Получаем список изменений для комментария
+            const entries = `${{ steps.parse-entries.outputs.ENTRIES }}`.split('\\n').filter(e => e.trim());
+            let changesList = '';
+            entries.forEach(entry => {
+              const [message, type] = entry.split('|');
+              if (message && type) {
+                changesList += `- **${type}**: ${message}\n`;
+              }
+            });
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ **Changelog успешно добавлен!**\n\n**Автор:** ${author}\n**ID записи:** будет добавлен в файл\n\n**Изменения:**\n${changesList || 'Не удалось распарсить изменения'}\n\nФайл: \`Resources/Changelog/ChangelogStarryPole.yml\``
+            });
+
+      - name: Add failure comment
+        if: steps.extract-changelog.outputs.found == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `⚠️ **Changelog не найден!**\n\nПожалуйста, добавьте changelog в описание PR в формате:\n\`\`\`\n:cl: автор\n- add: Добавлено что-то новое\n- fix: Исправлено что-то\n- tweak: Изменено что-то\n- remove: Удалено что-то\n\`\`\`\n\nChangelog должен находиться между \`:cl:\` и автоматическим комментарием.`
+            });
