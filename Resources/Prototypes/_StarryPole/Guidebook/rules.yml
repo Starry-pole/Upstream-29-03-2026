@@ -111,18 +111,18 @@
   text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules/Rule4.xml"
 
 - type: guideEntry
-  id: StarryPoleRule4
+  id: StarryPoleRule41
   name: Правило 41
   priority: 13
   ruleEntry: true
-  text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules/Rule4.xml"
+  text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules/Rule41.xml"
 
 - type: guideEntry
   id: StarryPoleRule5
   name: Правило 5
   priority: 14
   ruleEntry: true
-  text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules/Rule6.xml"
+  text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules/Rule5.xml"
 
 - type: guideEntry
   id: StarryPoleRule6
