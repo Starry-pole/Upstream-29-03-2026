@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.head_ref }}  # Важно! Переключаемся на ветку PR
+          ref: ${{ github.head_ref }}
 
       - name: Get PR details
         id: pr-details
@@ -29,11 +29,13 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           PR_BODY="${{ github.event.pull_request.body }}"
           PR_USER="${{ github.event.pull_request.user.login }}"
+          PR_BRANCH="${{ github.head_ref }}"
           
           echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
           echo "PR_URL=${PR_URL}" >> $GITHUB_ENV
           echo "PR_TITLE=${PR_TITLE}" >> $GITHUB_ENV
           echo "PR_USER=${PR_USER}" >> $GITHUB_ENV
+          echo "PR_BRANCH=${PR_BRANCH}" >> $GITHUB_ENV
           
           # Сохраняем тело PR во временный файл для дальнейшей обработки
           echo "${PR_BODY}" > pr_body.txt
@@ -226,13 +228,10 @@ jobs:
         run: |
           CHANGELOG_FILE="Resources/Changelog/ChangelogStarryPole.yml"
           
-          # Определяем текущую ветку (для PR это head_ref)
-          BRANCH_NAME="${{ github.head_ref }}"
+          # Используем переменную из env
+          BRANCH_NAME="${{ env.PR_BRANCH }}"
           
-          # Если это не PR, используем имя текущей ветки
-          if [ -z "$BRANCH_NAME" ]; then
-            BRANCH_NAME="${{ github.ref_name }}"
-          fi
+          echo "Current branch: ${BRANCH_NAME}"
           
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
