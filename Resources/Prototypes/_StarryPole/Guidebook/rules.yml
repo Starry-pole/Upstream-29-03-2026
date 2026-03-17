@@ -4,7 +4,7 @@
   name: Правила сервера
   priority: 0
   ruleEntry: true
-  text: "/ServerInfo/_StarryPole//ServerRules/StarryPoleRules.xml"
+  text: "/ServerInfo/_StarryPole/ServerRules/StarryPoleRules.xml"
   children:
   - StarryPoleRule0
   - StarryPoleRule1
