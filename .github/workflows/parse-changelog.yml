@@ -59,6 +59,13 @@ jobs:
           # Удаляем все HTML комментарии (<!-- ... -->)
           CLEAN_CHANGELOG=$(echo "$RAW_CHANGELOG" | sed 's/<!--.*-->//g' | sed '/^[[:space:]]*$/d')
           
+          # Удаляем строки с примерами (они содержат add/remove/tweak/fix внутри комментариев)
+          # Но оставляем реальные изменения
+          CLEAN_CHANGELOG=$(echo "$CLEAN_CHANGELOG" | grep -v "^[[:space:]]*- add: Добавлено веселье!" | \
+                                                     grep -v "^[[:space:]]*- remove: Удалено веселье!" | \
+                                                     grep -v "^[[:space:]]*- tweak: Изменено веселье!" | \
+                                                     grep -v "^[[:space:]]*- fix: Исправлено веселье!")
+          
           # Если после очистки ничего не осталось
           if [ -z "$CLEAN_CHANGELOG" ]; then
             echo "No valid changelog entries after cleaning"
@@ -97,7 +104,7 @@ jobs:
           # Извлекаем автора из строки с :cl:
           if [ -n "$CL_LINE" ]; then
             # Убираем :cl: и все после него до конца строки, затем убираем комментарии
-            AUTHOR=$(echo "$CL_LINE" | sed 's/.*:cl:[[:space:]]*//g' | sed 's/[[:space:]]*$//g' | sed 's/<!--.*//g' | sed 's/-->.*//g' | xargs)
+            AUTHOR=$(echo "$CL_LINE" | sed 's/.*:cl:[[:space:]]*//g' | sed 's/[[:space:]]*$//g' | sed 's/<!--.*//g' | sed 's/-->.*//g' | sed 's/\r//g' | xargs)
             
             # Если автор пустой или содержит только комментарий
             if [ -z "$AUTHOR" ] || [[ "$AUTHOR" == \<!--* ]] || [[ "$AUTHOR" == *--\> ]]; then
@@ -114,7 +121,6 @@ jobs:
           
           # Парсим все строки с изменениями (ищем строки, начинающиеся с -)
           ENTRIES=""
-          ENTRIES_JSON="[]"
           
           while IFS= read -r line; do
             # Пропускаем пустые строки
@@ -123,7 +129,7 @@ jobs:
             fi
             
             # Убираем HTML комментарии из строки полностью
-            clean_line=$(echo "$line" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | xargs)
+            clean_line=$(echo "$line" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | sed 's/\r//g' | xargs)
             
             # Если после очистки строка пустая, пропускаем
             if [ -z "$clean_line" ]; then
@@ -136,39 +142,29 @@ jobs:
               if [[ "$clean_line" =~ ^-[[:space:]]*add:[[:space:]]*(.*)$ ]]; then
                 MESSAGE="${BASH_REMATCH[1]}"
                 TYPE="Add"
-                EMOJI="✨"
               elif [[ "$clean_line" =~ ^-[[:space:]]*remove:[[:space:]]*(.*)$ ]]; then
                 MESSAGE="${BASH_REMATCH[1]}"
                 TYPE="Remove"
-                EMOJI="❌"
               elif [[ "$clean_line" =~ ^-[[:space:]]*tweak:[[:space:]]*(.*)$ ]]; then
                 MESSAGE="${BASH_REMATCH[1]}"
                 TYPE="Tweak"
-                EMOJI="🔧"
               elif [[ "$clean_line" =~ ^-[[:space:]]*fix:[[:space:]]*(.*)$ ]]; then
                 MESSAGE="${BASH_REMATCH[1]}"
                 TYPE="Fix"
-                EMOJI="🐛"
               else
                 echo "Skipping unrecognized line: $clean_line"
                 continue
               fi
               
               if [ -n "$MESSAGE" ]; then
-                # Очищаем сообщение от лишних пробелов и комментариев
-                MESSAGE=$(echo "$MESSAGE" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | xargs)
+                # Очищаем сообщение от лишних пробелов, комментариев и \r
+                MESSAGE=$(echo "$MESSAGE" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | sed 's/\r//g' | xargs)
                 
                 # Экранируем кавычки в сообщении
                 MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
                 
-                ENTRIES="${ENTRIES}${MESSAGE}|${TYPE}|${EMOJI}\n"
-                
-                # Для JSON
-                if [ "$ENTRIES_JSON" = "[]" ]; then
-                  ENTRIES_JSON="[{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
-                else
-                  ENTRIES_JSON="${ENTRIES_JSON},{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
-                fi
+                # Добавляем запись в формате для YAML
+                ENTRIES="${ENTRIES}  - message: \"${MESSAGE}\"\n    type: ${TYPE}\n"
                 
                 echo "Parsed: ${TYPE} - ${MESSAGE}"
               fi
@@ -176,10 +172,6 @@ jobs:
               echo "Skipping non-change line: $clean_line"
             fi
           done <<< "$CHANGELOG"
-          
-          if [ "$ENTRIES_JSON" != "[]" ]; then
-            ENTRIES_JSON="${ENTRIES_JSON}]"
-          fi
           
           # Проверяем, есть ли хотя бы одна запись
           if [ -z "$ENTRIES" ]; then
@@ -190,9 +182,8 @@ jobs:
           
           echo "AUTHOR=${AUTHOR}" >> $GITHUB_OUTPUT
           echo "ENTRIES<<EOF" >> $GITHUB_OUTPUT
-          echo -e "$ENTRIES" | sed '/^[[:space:]]*$/d' >> $GITHUB_OUTPUT
+          echo -e "$ENTRIES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          echo "ENTRIES_JSON=${ENTRIES_JSON}" >> $GITHUB_OUTPUT
 
       - name: Create directory if not exists
         if: steps.extract-changelog.outputs.found == 'true'
@@ -226,71 +217,41 @@ jobs:
           # Текущее время в нужном формате
           CURRENT_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S.0000000+00:00")
           
-          # Создаем временный файл с новыми записями
+          # Создаем новый файл с правильной структурой YAML
+          NEW_ENTRIES_FILE=$(mktemp)
+          
+          # Формируем новую запись в правильном формате YAML (список элементов)
+          echo "- author: ${{ steps.parse-entries.outputs.AUTHOR }}" >> $NEW_ENTRIES_FILE
+          echo "  changes:" >> $NEW_ENTRIES_FILE
+          echo -e "${{ steps.parse-entries.outputs.ENTRIES }}" >> $NEW_ENTRIES_FILE
+          echo "  id: ${NEW_ID}" >> $NEW_ENTRIES_FILE
+          echo "  time: '${CURRENT_TIME}'" >> $NEW_ENTRIES_FILE
+          echo "  url: ${{ env.PR_URL }}" >> $NEW_ENTRIES_FILE
+          echo "" >> $NEW_ENTRIES_FILE
+          
+          # Создаем временный файл для нового содержимого
           TEMP_FILE=$(mktemp)
           
-          # Добавляем новую запись
-          echo "id: ${NEW_ID}" >> $TEMP_FILE
-          echo "  time: '${CURRENT_TIME}'" >> $TEMP_FILE
-          echo "  url: ${{ env.PR_URL }}" >> $TEMP_FILE
-          echo "- author: ${{ steps.parse-entries.outputs.AUTHOR }}" >> $TEMP_FILE
-          echo "  changes:" >> $TEMP_FILE
-          
-          # Добавляем все изменения
-          if [ -n "${{ steps.parse-entries.outputs.ENTRIES }}" ]; then
-            while IFS= read -r entry; do
-              if [ -n "$entry" ]; then
-                IFS='|' read -r message type emoji <<< "$entry"
-                echo "  - message: \"${message}\"" >> $TEMP_FILE
-                echo "    type: ${type}" >> $TEMP_FILE
-              fi
-            done <<< "$(echo -e "${{ steps.parse-entries.outputs.ENTRIES }}")"
+          # Копируем заголовки если есть
+          if [ -f "$CHANGELOG_FILE" ]; then
+            # Сохраняем заголовки (строки начинающиеся с #)
+            grep "^#" "$CHANGELOG_FILE" > "$TEMP_FILE" 2>/dev/null || true
+            echo "" >> "$TEMP_FILE"
           fi
           
-          # Добавляем пустую строку для разделения
-          echo "" >> $TEMP_FILE
+          # Добавляем новые записи
+          cat "$NEW_ENTRIES_FILE" >> "$TEMP_FILE"
           
-          # Проверяем, что файл содержит корректные данные
-          if [ -s "$TEMP_FILE" ]; then
-            # Вставляем новые записи в начало файла (после заголовков)
-            if [ -f "$CHANGELOG_FILE" ]; then
-              # Копируем существующий файл
-              cp "$CHANGELOG_FILE" "${CHANGELOG_FILE}.old"
-              
-              # Сохраняем заголовки если есть
-              HEADER_LINES=$(grep -n "^id:" "$CHANGELOG_FILE" | head -1 | cut -d: -f1)
-              if [ -n "$HEADER_LINES" ] && [ "$HEADER_LINES" -gt 1 ]; then
-                HEADER_LINES=$((HEADER_LINES - 1))
-                head -n $HEADER_LINES "$CHANGELOG_FILE" > "${CHANGELOG_FILE}.new"
-              else
-                # Если нет заголовков, просто создаем пустой файл
-                > "${CHANGELOG_FILE}.new"
-              fi
-              
-              # Добавляем новые записи
-              cat "$TEMP_FILE" >> "${CHANGELOG_FILE}.new"
-              
-              # Добавляем старые записи (без заголовков)
-              if [ -n "$HEADER_LINES" ] && [ "$HEADER_LINES" -gt 1 ]; then
-                tail -n +$((HEADER_LINES + 1)) "$CHANGELOG_FILE" >> "${CHANGELOG_FILE}.new"
-              else
-                cat "$CHANGELOG_FILE" >> "${CHANGELOG_FILE}.new"
-              fi
-              
-              # Заменяем оригинальный файл
-              mv "${CHANGELOG_FILE}.new" "$CHANGELOG_FILE"
-              rm -f "${CHANGELOG_FILE}.old"
-            else
-              # Если файла нет, просто копируем временный
-              cp "$TEMP_FILE" "$CHANGELOG_FILE"
-            fi
-            
-            echo "Changelog updated successfully in $CHANGELOG_FILE"
-            echo "Added entry with ID: ${NEW_ID}"
-          else
-            echo "No valid changelog entries to add"
-            exit 1
+          # Добавляем старые записи (без заголовков)
+          if [ -f "$CHANGELOG_FILE" ]; then
+            grep -v "^#" "$CHANGELOG_FILE" | grep -v "^[[:space:]]*$" >> "$TEMP_FILE" 2>/dev/null || true
           fi
+          
+          # Заменяем оригинальный файл
+          mv "$TEMP_FILE" "$CHANGELOG_FILE"
+          
+          echo "Changelog updated successfully in $CHANGELOG_FILE"
+          echo "Added entry with ID: ${NEW_ID}"
 
       - name: Commit and push changes
         if: steps.extract-changelog.outputs.found == 'true'
@@ -351,14 +312,27 @@ jobs:
           PR_USER="${{ env.PR_USER }}"
           NEW_ID="${{ steps.update-file.outputs.NEW_ID }}"
           
-          # Формируем список изменений
+          # Формируем список изменений с эмодзи для Discord
           CHANGES=""
-          while IFS= read -r entry; do
-            if [ -n "$entry" ]; then
-              IFS='|' read -r message type emoji <<< "$entry"
-              CHANGES="${CHANGES}${emoji} **${type}**: ${message}\n"
+          ENTRIES="${{ steps.parse-entries.outputs.ENTRIES }}"
+          
+          while IFS= read -r line; do
+            if [[ "$line" =~ message:[[:space:]]*\"(.*)\"[[:space:]]*type:[[:space:]]*(.*) ]]; then
+              MESSAGE="${BASH_REMATCH[1]}"
+              TYPE="${BASH_REMATCH[2]}"
+              
+              # Добавляем эмодзи в зависимости от типа
+              case "$TYPE" in
+                Add) EMOJI="✨" ;;
+                Remove) EMOJI="❌" ;;
+                Tweak) EMOJI="🔧" ;;
+                Fix) EMOJI="🐛" ;;
+                *) EMOJI="📝" ;;
+              esac
+              
+              CHANGES="${CHANGES}${EMOJI} **${TYPE}**: ${MESSAGE}\n"
             fi
-          done <<< "$(echo -e "${{ steps.parse-entries.outputs.ENTRIES }}")"
+          done <<< "$(echo -e "$ENTRIES")"
           
           # Создаем JSON для Discord
           cat > discord.json << EOF
@@ -410,14 +384,25 @@ jobs:
             const newId = '${{ steps.update-file.outputs.NEW_ID }}';
             
             // Получаем список изменений для комментария
-            const entries = `${{ steps.parse-entries.outputs.ENTRIES }}`.split('\\n').filter(e => e.trim());
+            const entries = `${{ steps.parse-entries.outputs.ENTRIES }}`;
             let changesList = '';
-            entries.forEach(entry => {
-              const [message, type, emoji] = entry.split('|');
-              if (message && type) {
+            
+            // Парсим изменения для комментария
+            const lines = entries.split('\\n');
+            for (const line of lines) {
+              const match = line.match(/message: \"(.*)\"\s+type: (.*)/);
+              if (match) {
+                const message = match[1];
+                const type = match[2];
+                let emoji = '📝';
+                if (type === 'Add') emoji = '✨';
+                else if (type === 'Remove') emoji = '❌';
+                else if (type === 'Tweak') emoji = '🔧';
+                else if (type === 'Fix') emoji = '🐛';
+                
                 changesList += `${emoji} **${type}**: ${message}\n`;
               }
-            });
+            }
             
             const webhookStatus = process.env.DISCORD_WEBHOOK ? '✅ Отправлено' : '⚠️ Не настроен';
             
@@ -437,5 +422,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `⚠️ **Changelog не найден!**\n\nПожалуйста, добавьте changelog в описание PR в формате:\n\`\`\`\n:cl: автор\n- add: Добавлено что-то новое\n- fix: Исправлено что-то\n- tweak: Изменено что-то\n- remove: Удалено что-то\n\`\`\`\n\nChangelog должен находиться между \`:cl:\` и автоматическим комментарием.\n\n**Важно:** Не используйте HTML комментарии (<!-- -->) внутри changelog!`
+              body: `⚠️ **Changelog не найден!**\n\nПожалуйста, добавьте changelog в описание PR в формате:\n\`\`\`\n:cl: автор\n- add: Добавлено что-то новое\n- fix: Исправлено что-то\n- tweak: Изменено что-то\n- remove: Удалено что-то\n\`\`\`\n\nChangelog должен находиться между \`:cl:\` и автоматическим комментарием.\n\n**Важно:** Не используйте HTML комментарии (<!-- -->) внутри changelog и не копируйте примеры!`
             });
