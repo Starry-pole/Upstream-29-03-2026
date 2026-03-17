@@ -56,7 +56,7 @@ jobs:
             exit 0
           fi
           
-          # Удаляем все HTML комментарии (<!-- ... -->) и пустые строки
+          # Удаляем все HTML комментарии (<!-- ... -->)
           CLEAN_CHANGELOG=$(echo "$RAW_CHANGELOG" | sed 's/<!--.*-->//g' | sed '/^[[:space:]]*$/d')
           
           # Если после очистки ничего не осталось
@@ -78,85 +78,102 @@ jobs:
         if: steps.extract-changelog.outputs.found == 'true'
         id: parse-entries
         run: |
-          # Получаем первую строку (должна содержать автора после :cl:)
-          FIRST_LINE=$(echo "$CHANGELOG" | head -n1)
+          # Показываем весь changelog для отладки
+          echo "Full changelog:"
+          echo "$CHANGELOG"
+          echo "---"
           
-          # Извлекаем автора - все, что после :cl: до конца строки, удаляем комментарии
-          AUTHOR=$(echo "$FIRST_LINE" | sed 's/^:cl:[[:space:]]*//g' | sed 's/[[:space:]]*$//g' | sed 's/<!--.*-->//g' | xargs)
+          # Находим строку с :cl: (она может быть в любом месте)
+          CL_LINE=""
+          while IFS= read -r line; do
+            if [[ "$line" =~ :cl: ]]; then
+              CL_LINE="$line"
+              break
+            fi
+          done <<< "$CHANGELOG"
           
-          # Если автор пустой, используем автора PR
-          if [ -z "$AUTHOR" ]; then
-            AUTHOR="${{ env.PR_USER }}"
-            echo "Author not found in :cl: line, using PR author: ${AUTHOR}"
+          echo "Found :cl: line: ${CL_LINE}"
+          
+          # Извлекаем автора из строки с :cl:
+          if [ -n "$CL_LINE" ]; then
+            # Убираем :cl: и все после него до конца строки, затем убираем комментарии
+            AUTHOR=$(echo "$CL_LINE" | sed 's/.*:cl:[[:space:]]*//g' | sed 's/[[:space:]]*$//g' | sed 's/<!--.*//g' | sed 's/-->.*//g' | xargs)
+            
+            # Если автор пустой или содержит только комментарий
+            if [ -z "$AUTHOR" ] || [[ "$AUTHOR" == \<!--* ]] || [[ "$AUTHOR" == *--\> ]]; then
+              AUTHOR="${{ env.PR_USER }}"
+              echo "Author not valid, using PR author: ${AUTHOR}"
+            else
+              echo "Author extracted from :cl: line: ${AUTHOR}"
+            fi
           else
-            echo "Author extracted from :cl: line: ${AUTHOR}"
+            # Если строка с :cl: не найдена, используем автора PR
+            AUTHOR="${{ env.PR_USER }}"
+            echo "No :cl: line found, using PR author: ${AUTHOR}"
           fi
           
-          # Парсим остальные строки
+          # Парсим все строки с изменениями (ищем строки, начинающиеся с -)
           ENTRIES=""
           ENTRIES_JSON="[]"
-          LINE_NUM=0
           
           while IFS= read -r line; do
-            LINE_NUM=$((LINE_NUM + 1))
-            
-            # Пропускаем первую строку (автор)
-            if [ $LINE_NUM -eq 1 ]; then
-              continue
-            fi
-            
             # Пропускаем пустые строки
             if [ -z "$line" ]; then
               continue
             fi
             
-            # Удаляем HTML комментарии из строки
-            line=$(echo "$line" | sed 's/<!--.*-->//g')
+            # Убираем HTML комментарии из строки полностью
+            clean_line=$(echo "$line" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | xargs)
             
-            # Если после удаления комментариев строка пустая, пропускаем
-            if [ -z "$line" ]; then
+            # Если после очистки строка пустая, пропускаем
+            if [ -z "$clean_line" ]; then
               continue
             fi
             
-            # Определяем тип изменения
-            if [[ "$line" =~ ^-[[:space:]]*add:[[:space:]]*(.*)$ ]]; then
-              MESSAGE="${BASH_REMATCH[1]}"
-              TYPE="Add"
-              EMOJI="✨"
-            elif [[ "$line" =~ ^-[[:space:]]*remove:[[:space:]]*(.*)$ ]]; then
-              MESSAGE="${BASH_REMATCH[1]}"
-              TYPE="Remove"
-              EMOJI="❌"
-            elif [[ "$line" =~ ^-[[:space:]]*tweak:[[:space:]]*(.*)$ ]]; then
-              MESSAGE="${BASH_REMATCH[1]}"
-              TYPE="Tweak"
-              EMOJI="🔧"
-            elif [[ "$line" =~ ^-[[:space:]]*fix:[[:space:]]*(.*)$ ]]; then
-              MESSAGE="${BASH_REMATCH[1]}"
-              TYPE="Fix"
-              EMOJI="🐛"
-            else
-              echo "Skipping unrecognized line: $line"
-              continue
-            fi
-            
-            if [ -n "$MESSAGE" ]; then
-              # Очищаем сообщение от лишних пробелов и комментариев
-              MESSAGE=$(echo "$MESSAGE" | sed 's/<!--.*-->//g' | xargs)
-              
-              # Экранируем кавычки в сообщении
-              MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-              
-              ENTRIES="${ENTRIES}${MESSAGE}|${TYPE}|${EMOJI}\n"
-              
-              # Для JSON
-              if [ "$ENTRIES_JSON" = "[]" ]; then
-                ENTRIES_JSON="[{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
+            # Проверяем, начинается ли строка с дефиса (признак изменения)
+            if [[ "$clean_line" =~ ^-[[:space:]]* ]]; then
+              # Определяем тип изменения
+              if [[ "$clean_line" =~ ^-[[:space:]]*add:[[:space:]]*(.*)$ ]]; then
+                MESSAGE="${BASH_REMATCH[1]}"
+                TYPE="Add"
+                EMOJI="✨"
+              elif [[ "$clean_line" =~ ^-[[:space:]]*remove:[[:space:]]*(.*)$ ]]; then
+                MESSAGE="${BASH_REMATCH[1]}"
+                TYPE="Remove"
+                EMOJI="❌"
+              elif [[ "$clean_line" =~ ^-[[:space:]]*tweak:[[:space:]]*(.*)$ ]]; then
+                MESSAGE="${BASH_REMATCH[1]}"
+                TYPE="Tweak"
+                EMOJI="🔧"
+              elif [[ "$clean_line" =~ ^-[[:space:]]*fix:[[:space:]]*(.*)$ ]]; then
+                MESSAGE="${BASH_REMATCH[1]}"
+                TYPE="Fix"
+                EMOJI="🐛"
               else
-                ENTRIES_JSON="${ENTRIES_JSON},{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
+                echo "Skipping unrecognized line: $clean_line"
+                continue
               fi
               
-              echo "Parsed: ${TYPE} - ${MESSAGE}"
+              if [ -n "$MESSAGE" ]; then
+                # Очищаем сообщение от лишних пробелов и комментариев
+                MESSAGE=$(echo "$MESSAGE" | sed 's/<!--.*-->//g' | sed 's/<!--.*//g' | sed 's/.*-->//g' | xargs)
+                
+                # Экранируем кавычки в сообщении
+                MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+                
+                ENTRIES="${ENTRIES}${MESSAGE}|${TYPE}|${EMOJI}\n"
+                
+                # Для JSON
+                if [ "$ENTRIES_JSON" = "[]" ]; then
+                  ENTRIES_JSON="[{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
+                else
+                  ENTRIES_JSON="${ENTRIES_JSON},{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
+                fi
+                
+                echo "Parsed: ${TYPE} - ${MESSAGE}"
+              fi
+            else
+              echo "Skipping non-change line: $clean_line"
             fi
           done <<< "$CHANGELOG"
           
