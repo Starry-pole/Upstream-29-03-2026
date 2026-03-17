@@ -48,39 +48,73 @@ jobs:
         id: extract-changelog
         run: |
           # Ищем начало changelog с :cl: и конец перед авто-комментарием
-          CHANGELOG=$(cat pr_body.txt | awk '/:cl:/{flag=1; next} /<!-- This is an auto-generated comment/{flag=0} flag')
+          RAW_CHANGELOG=$(cat pr_body.txt | awk '/:cl:/{flag=1; next} /<!-- This is an auto-generated comment/{flag=0} flag')
           
-          if [ -z "$CHANGELOG" ]; then
+          if [ -z "$RAW_CHANGELOG" ]; then
             echo "No changelog found in PR"
             echo "found=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Очищаем от лишних пробелов и пустых строк
-          CHANGELOG=$(echo "$CHANGELOG" | sed '/^[[:space:]]*$/d')
+          # Удаляем все HTML комментарии (<!-- ... -->) и пустые строки
+          CLEAN_CHANGELOG=$(echo "$RAW_CHANGELOG" | sed 's/<!--.*-->//g' | sed '/^[[:space:]]*$/d')
+          
+          # Если после очистки ничего не осталось
+          if [ -z "$CLEAN_CHANGELOG" ]; then
+            echo "No valid changelog entries after cleaning"
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
           
           echo "found=true" >> $GITHUB_OUTPUT
           echo "CHANGELOG<<EOF" >> $GITHUB_ENV
-          echo "$CHANGELOG" >> $GITHUB_ENV
+          echo "$CLEAN_CHANGELOG" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
           
-          echo "Extracted changelog:"
-          echo "$CHANGELOG"
+          echo "Extracted and cleaned changelog:"
+          echo "$CLEAN_CHANGELOG"
 
       - name: Parse changelog entries
         if: steps.extract-changelog.outputs.found == 'true'
         id: parse-entries
         run: |
-          # Получаем автора из первой строки changelog после :cl:
-          AUTHOR=$(echo "$CHANGELOG" | head -n1 | sed 's/^:cl:[[:space:]]*//g' | xargs)
+          # Получаем первую строку (должна содержать автора после :cl:)
+          FIRST_LINE=$(echo "$CHANGELOG" | head -n1)
+          
+          # Извлекаем автора - все, что после :cl: до конца строки, удаляем комментарии
+          AUTHOR=$(echo "$FIRST_LINE" | sed 's/^:cl:[[:space:]]*//g' | sed 's/[[:space:]]*$//g' | sed 's/<!--.*-->//g' | xargs)
+          
+          # Если автор пустой, используем автора PR
+          if [ -z "$AUTHOR" ]; then
+            AUTHOR="${{ env.PR_USER }}"
+            echo "Author not found in :cl: line, using PR author: ${AUTHOR}"
+          else
+            echo "Author extracted from :cl: line: ${AUTHOR}"
+          fi
           
           # Парсим остальные строки
           ENTRIES=""
           ENTRIES_JSON="[]"
+          LINE_NUM=0
+          
           while IFS= read -r line; do
+            LINE_NUM=$((LINE_NUM + 1))
+            
             # Пропускаем первую строку (автор)
-            if [ -z "$ENTRIES" ] && [ -z "$AUTHOR_SET" ]; then
-              AUTHOR_SET="true"
+            if [ $LINE_NUM -eq 1 ]; then
+              continue
+            fi
+            
+            # Пропускаем пустые строки
+            if [ -z "$line" ]; then
+              continue
+            fi
+            
+            # Удаляем HTML комментарии из строки
+            line=$(echo "$line" | sed 's/<!--.*-->//g')
+            
+            # Если после удаления комментариев строка пустая, пропускаем
+            if [ -z "$line" ]; then
               continue
             fi
             
@@ -102,12 +136,17 @@ jobs:
               TYPE="Fix"
               EMOJI="🐛"
             else
+              echo "Skipping unrecognized line: $line"
               continue
             fi
             
             if [ -n "$MESSAGE" ]; then
+              # Очищаем сообщение от лишних пробелов и комментариев
+              MESSAGE=$(echo "$MESSAGE" | sed 's/<!--.*-->//g' | xargs)
+              
               # Экранируем кавычки в сообщении
               MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+              
               ENTRIES="${ENTRIES}${MESSAGE}|${TYPE}|${EMOJI}\n"
               
               # Для JSON
@@ -116,11 +155,20 @@ jobs:
               else
                 ENTRIES_JSON="${ENTRIES_JSON},{\"message\":\"${MESSAGE}\",\"type\":\"${TYPE}\",\"emoji\":\"${EMOJI}\"}"
               fi
+              
+              echo "Parsed: ${TYPE} - ${MESSAGE}"
             fi
           done <<< "$CHANGELOG"
           
           if [ "$ENTRIES_JSON" != "[]" ]; then
             ENTRIES_JSON="${ENTRIES_JSON}]"
+          fi
+          
+          # Проверяем, есть ли хотя бы одна запись
+          if [ -z "$ENTRIES" ]; then
+            echo "No valid changelog entries found"
+            echo "found=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
           echo "AUTHOR=${AUTHOR}" >> $GITHUB_OUTPUT
@@ -372,5 +420,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `⚠️ **Changelog не найден!**\n\nПожалуйста, добавьте changelog в описание PR в формате:\n\`\`\`\n:cl: автор\n- add: Добавлено что-то новое\n- fix: Исправлено что-то\n- tweak: Изменено что-то\n- remove: Удалено что-то\n\`\`\`\n\nChangelog должен находиться между \`:cl:\` и автоматическим комментарием.`
+              body: `⚠️ **Changelog не найден!**\n\nПожалуйста, добавьте changelog в описание PR в формате:\n\`\`\`\n:cl: автор\n- add: Добавлено что-то новое\n- fix: Исправлено что-то\n- tweak: Изменено что-то\n- remove: Удалено что-то\n\`\`\`\n\nChangelog должен находиться между \`:cl:\` и автоматическим комментарием.\n\n**Важно:** Не используйте HTML комментарии (<!-- -->) внутри changelog!`
             });
