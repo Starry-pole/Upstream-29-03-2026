@@ -232,28 +232,41 @@ jobs:
         run: |
           CHANGELOG_FILE="Resources/Changelog/ChangelogStarryPole.yml"
           
-          # Получаем имя ветки из env
-          BRANCH_NAME="${{ env.PR_BRANCH }}"
+          # Получаем имя ветки
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
           
-          echo "Current branch: ${BRANCH_NAME}"
+          echo "Current branch from event: ${BRANCH_NAME}"
           echo "Current directory: $(pwd)"
-          echo "Git status:"
+          echo "Git status before:"
           git status
+          echo "Current branch:"
+          git branch --show-current
           
           # Настраиваем git
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
+          # Создаем и переключаемся на ветку принудительно
+          git checkout -b temp-branch 2>/dev/null || true
+          git fetch origin "${BRANCH_NAME}" 2>/dev/null || true
+          git checkout "${BRANCH_NAME}" 2>/dev/null || git checkout -b "${BRANCH_NAME}" origin/"${BRANCH_NAME}" 2>/dev/null || git checkout -b "${BRANCH_NAME}"
+          
+          echo "After checkout:"
+          git branch --show-current
+          
           # Добавляем файл
           git add "$CHANGELOG_FILE"
           
           # Создаем коммит
-          git commit -m "Add changelog for PR #${{ env.PR_NUMBER }} [skip ci]" || echo "No changes to commit"
-          
-          # Пуш с указанием ветки
-          git push origin HEAD:"${BRANCH_NAME}"
-          
-          echo "Changes pushed to branch: ${BRANCH_NAME}"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add changelog for PR #${{ env.PR_NUMBER }} [skip ci]"
+            
+            # Пуш с указанием ветки
+            git push origin HEAD:"${BRANCH_NAME}"
+            echo "Changes pushed to branch: ${BRANCH_NAME}"
+          fi
 
       - name: Send Discord Webhook
         if: steps.extract-changelog.outputs.found == 'true'
