@@ -3,7 +3,7 @@
   bodyPart: HeadTop
 
   groupWhitelist: [Human]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   coloring:
     default:
       type:
@@ -27,7 +27,7 @@
   bodyPart: HeadTop
 
   groupWhitelist: [Human]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   coloring:
     default:
       type:
@@ -51,7 +51,7 @@
   bodyPart: HeadTop
 
   groupWhitelist: [Human]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   coloring:
     default:
       type:
@@ -75,7 +75,7 @@
   bodyPart: Tail
 
   groupWhitelist: [Human]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   coloring:
     default:
       type:

@@ -1,0 +1,4 @@
+- type: guideEntry
+  id: developmentplan
+  name: План по разработке Starry Pole
+  text: "/ServerInfo/_StarryPole/developmentplan.xml"

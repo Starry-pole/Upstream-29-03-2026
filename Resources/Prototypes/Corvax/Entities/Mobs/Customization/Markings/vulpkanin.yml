@@ -3,7 +3,7 @@
 
   bodyPart: RFoot #highest possible layer
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: pawsocks
@@ -12,7 +12,7 @@
   id: FoxTail
   bodyPart: Tail
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: false # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: vulp_tail
@@ -24,7 +24,7 @@
   bodyPart: HeadTop
 
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: vulp_ear
@@ -36,7 +36,7 @@
   bodyPart: Tail
 
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: wolf_tail
@@ -48,7 +48,7 @@
   bodyPart: Chest
 
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: true # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: vulp_belly-torso
@@ -58,7 +58,7 @@
   bodyPart: Snout
 
   groupWhitelist: [Vulpkanin]
-  sponsorOnly: false # Corvax-Sponsors
+  sponsorOnly: false # edit StarryPole Sponsors
   sprites:
     - sprite: Corvax/Mobs/Customization/vulpkanin.rsi
       state: vulp_face
